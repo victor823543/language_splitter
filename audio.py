@@ -2,7 +2,6 @@ import whisper
 import os
 import ssl
 from easygoogletranslate import EasyGoogleTranslate as translate
-import requests
 from pydub import AudioSegment
 from rapidfuzz import fuzz
 import pickle
@@ -117,21 +116,22 @@ def sentenceCombining(sentencesA, sentencesB):
                 break
     return combined_file
 
-def mixFiles(file_a, file_b, timestamps_a, timestamps_b, name):
+def mixFiles(file_path_a, file_path_b, timestamps_a, timestamps_b, output_path):
+    abs_path_a = os.path.abspath(file_path_a)
+    abs_path_b = os.path.abspath(file_path_b)
+    file_a = AudioSegment.from_mp3(abs_path_a)
+    file_b = AudioSegment.from_mp3(abs_path_b)
     sentences_a = fileSlicing(file_a, timestamps_a)
     sentences_b = fileSlicing(file_b, timestamps_b)
 
     new_file = sentenceCombining(sentences_a, sentences_b)
-    folder = os.path.abspath("Audio/MixedAudio")
-    #folder = os.path.abspath("language_app/static/language_app/audio")
-    output = f"{folder}/{name}"
+    output = os.path.abspath(output_path)
     new_file.export(output, format="mp3")
 #______________________
 
 #Functions for transcribing files || returns result['segments']
 #If store=True, stores object as pkl object
 def transcribe(filename, store=False, pkl_name=None):
-    filename = f'Audio/ShortenedAudio/{filename}.mp3'
     path = os.path.abspath(filename)
     #Change model for more accuracy or more efficiency
     model = whisper.load_model("base")
@@ -393,7 +393,7 @@ def align(setOfSentences_en, setOfSentences_es):
 
 #Main function -- parameters (Name of file to export, name of first language file, name of second language file,
 # pickle options [0=transcribe, 1=get from pickle obj, 2=transcribe and store], name of first pickle file, name of second pickle file)
-def split_audio(filename_out, filename1=None, filename2=None, pkl=0, pkl_name_A=None, pkl_name_B=None):
+def split_audio(filepath_out, filename1=None, filename2=None, pkl=0, pkl_name_A=None, pkl_name_B=None):
 
     #Transcribing audiofiles
     if not pkl:
@@ -418,20 +418,11 @@ def split_audio(filename_out, filename1=None, filename2=None, pkl=0, pkl_name_A=
     timestamps_en, timestamps_es = align(setOfSentences_en, setOfSentences_es)
 
     #Calling the filemixing function
-    filename_en = f'Audio/ShortenedAudio/{filename1}.mp3'
-    path_eng = os.path.abspath(filename_en)
-    filename_es = f'Audio/ShortenedAudio/{filename2}.mp3'
-    path_esp = os.path.abspath(filename_es)
-    file_en = AudioSegment.from_mp3(path_eng)
-    file_es = AudioSegment.from_mp3(path_esp)
-    file_out = f'{filename_out}.mp3'
-    mixFiles(file_en, file_es, timestamps_en, timestamps_es, file_out)
+    mixFiles(filename1, filename2, timestamps_en, timestamps_es, filepath_out)
 
 
     
 
-
-split_audio('sherlock_mixed_1', 'english_original_a', 'spanish_original_a', 2, 'PickleObjects/english_obj.pkl', 'PickleObjects/spanish_obj.pkl')
 
 
 

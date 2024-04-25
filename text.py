@@ -2,11 +2,20 @@ from easygoogletranslate import EasyGoogleTranslate as translate
 from rapidfuzz import fuzz
 import re
 import json
+import spacy
 
+LLM_ES = 'es_core_news_sm'
+LLM_EN = 'en_core_web_sm'
 
-translator = translate(source_language='es', target_language='en', timeout=10)
+translator = translate(source_language='es', target_language='en', timeout=30)
 
-def read_sentences_from_file(file_path):
+def read_sentences_from_file(file_path, language):
+    if language == 'en':
+        model = LLM_EN
+    if language == 'es':
+        model = LLM_ES
+
+    nlp = spacy.load(model)
     sentences = []
     with open(file_path, 'r') as file:
         # Read the entire content of the file
@@ -18,20 +27,27 @@ def read_sentences_from_file(file_path):
         # Remove newline characters
         content = content.replace('\n', ' ')
 
+        '''
+        OLD SPLITTING
         # Split the content into sentences using regular expressions
         pattern = r'(?<!Mr|Ms|Mrs)[.!?]\s+'
         sentences = re.split(pattern, content)
+        '''
 
+        doc = nlp(content)
+        sentences = [sentence.text for sentence in doc.sents]
+   
     # Remove empty sentences
     sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
+    
     return sentences
 
 def check_similarity(sentences_a, sentences_b):
 
     text_a = ''.join([x for x in sentences_a])
     text_b = ''.join([x for x in sentences_b])
-    length_a = len(text_a)
-    length_b = len(text_b)
+    length_a = len(text_a.split())
+    length_b = len(text_b.split())
 
     diff = abs(length_a - length_b)
     length_comparison_points = 10 - (diff * 3)
@@ -182,11 +198,14 @@ def align_text(sentences_a, sentences_b, aligned_sentences_a, aligned_sentences_
                         max_values_list.append(max_similarity)
                         similarity_comparison[max_similarity_index] = 0.0
                     
+                    unique_max_index_list = []
+                    [unique_max_index_list.append(i) for i in max_index_list if i not in unique_max_index_list]
+
                     finished = False
                     goal_similarity = 0.7
                     combined_results = {}
                     
-                    for m_index in max_index_list:
+                    for m_index in unique_max_index_list:
                         if m_index == 0:
                             result_check = double_check(sentences_a, sentences_b, index + 1, index + 1)
                             combined_results[0] = result_check + max_values_list[max_index_list.index(0)]
@@ -273,6 +292,8 @@ def align_text(sentences_a, sentences_b, aligned_sentences_a, aligned_sentences_
                 warnings.append(index)
 
             print(index)
+            print(aligned_sentences_a[index])
+            print(aligned_sentences_b[index])
 
 def create_text_file_from_list(input_list, similarities, warnings, file_path):
     """Create a text file with each item from the input list on a new line."""
@@ -284,7 +305,7 @@ def create_text_file_from_list(input_list, similarities, warnings, file_path):
             except IndexError:
                 file.write(str(item) + f' # Error {warning}' + '\n')
 
-def store_as_json(output_path, list_a, list_b, similarities, warnings):
+def store_as_json(output_path, list_a, list_b, similarities, warnings, should_return=False, should_output=True):
     mixed_obj = []
     for index, sentence_a in enumerate(list_a):
         try:
@@ -306,17 +327,44 @@ def store_as_json(output_path, list_a, list_b, similarities, warnings):
         'warnings': warnings,
         'complete': mixed_obj,
     }
-    if output_path:
+    if should_output:
+        out = output_path if output_path else 'unnamed_json_object.json'
         json_data = json.dumps(python_obj)
-        with open(output_path, "w") as json_file:
+        with open(out, "w") as json_file:
             json_file.write(json_data)
-    else:
+    if should_return:
         return python_obj
 
-def split_text(textfile1, textfile2, output_option, output_a=None, output_b=None, output_json=None):
+def finished_text_to_json(file1, file2, output):
+    sentences_a = []
+    sentences_b = []
+    with open(file1, 'r') as file:
+        for line in file:
+            parts = line.split('#', 1)
 
-    sentences_a = read_sentences_from_file(textfile1)
-    sentences_b = read_sentences_from_file(textfile2)
+            sentence = parts[0] if len(parts) > 1 else line
+            sentences_a.append(sentence)
+    
+    with open(file2, 'r') as file:
+        for line in file:
+            parts = line.split('#', 1)
+
+            sentence = parts[0] if len(parts) > 1 else line
+            sentences_b.append(sentence)
+    
+    json_object = {
+        'text_a': sentences_a,
+        'text_b': sentences_b,
+    }
+    json_data = json.dumps(json_object)
+
+    with open(output, 'w') as json_file:
+        json_file.write(json_data)
+
+def split_text(textfile1, textfile2, output_option, output_a=None, output_b=None, output_json=None, languages=['en', 'es'],):
+
+    sentences_a = read_sentences_from_file(textfile1, languages[0])
+    sentences_b = read_sentences_from_file(textfile2, languages[1])
 
     aligned_sentences_a = []
     aligned_sentences_b = []
@@ -338,11 +386,9 @@ def split_text(textfile1, textfile2, output_option, output_a=None, output_b=None
         store_as_json(output_json, aligned_sentences_a, aligned_sentences_b, similarities, warnings)
     
     if not output_option:
-        return_object = store_as_json(output_json, aligned_sentences_a, aligned_sentences_b, similarities, warnings)
+        output = True if output_json else False
+        return_object = store_as_json(output_json, aligned_sentences_a, aligned_sentences_b, similarities, warnings, True, output)
         return return_object
-
-
-split_text('TextFiles/english.txt', 'TextFiles/spanish.txt', 3, 'english_a.txt', 'spanish_a.txt', 'sherlock_holmes_1.json')
 
 
 

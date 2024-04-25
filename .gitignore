@@ -5,5 +5,10 @@ JsonObjects
 
 pydub_workspace.py 
 testing.py
+run.py
+
 env
 .env
+
+__pycache__
+
